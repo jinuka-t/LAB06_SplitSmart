@@ -1,0 +1,62 @@
+@startuml
+title SplitSmart component boundaries (proposal)
+left to right direction
+skinparam componentStyle rectangle
+
+package "Clients" {
+  [Swing Desktop\nMVP] as Swing
+  [Web Client\nFuture] as Web
+  [Android Client\nFuture] as Android
+  [iOS Client\nFuture] as iOS
+}
+
+cloud "OIDC Identity Provider\nemail verification / recovery" as IdP
+component "HTTPS JSON API\nAuthentication + authorization" as API
+package "SplitSmart Modular Service" {
+  [Groups + Invitations] as Groups
+  [Expense + Split] as Expense
+  [Approval Policy] as Approval
+  [Ledger + Balance] as Ledger
+  [Settlement] as Settlement
+  [Reports] as Reports
+  [Notification Inbox + Outbox] as Notify
+  [Receipt Access Adapter] as Receipt
+}
+database "PostgreSQL\nrecords + ledger + outbox" as DB
+component "Private Receipt Store" as Blob
+component "Notification Providers\n(channel TBD)" as Providers
+
+Swing --> IdP : external browser / PKCE
+Web --> IdP : OIDC flow
+Android --> IdP : external browser / PKCE
+iOS --> IdP : external browser / PKCE
+Swing --> API : authenticated HTTPS
+Web --> API : authenticated HTTPS
+Android --> API : authenticated HTTPS
+iOS --> API : authenticated HTTPS
+API --> IdP : validate identity
+API --> Groups
+API --> Expense
+API --> Approval
+API --> Ledger
+API --> Settlement
+API --> Reports
+API --> Notify
+API --> Receipt
+Groups --> DB
+Expense --> DB
+Expense --> Receipt
+Approval --> DB
+Approval --> Ledger : final approval transaction
+Ledger --> DB
+Settlement --> Ledger
+Reports --> DB : authorized queries
+Notify --> DB : outbox + inbox
+Notify --> Providers : async retry / dedupe
+Receipt --> Blob : private bytes
+
+note bottom of DB
+Only the service is authoritative.
+No client database credentials.
+end note
+@enduml

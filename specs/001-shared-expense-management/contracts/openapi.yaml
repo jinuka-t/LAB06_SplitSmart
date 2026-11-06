@@ -1,0 +1,941 @@
+openapi: 3.1.0
+info:
+  title: SplitSmart API
+  version: 1.0.0-proposal
+  description: |
+    Proposed client-neutral contract for Swing MVP and future web/mobile clients.
+    Identity registration, email verification, sign-in and recovery are provided by
+    the selected OIDC provider; see identity.md. The provider itself is not selected.
+servers:
+  - url: https://api.example.invalid/v1
+    description: Placeholder only; deployment host is undecided.
+security:
+  - bearerAuth: []
+tags:
+  - name: Groups
+  - name: Invitations
+  - name: Expenses
+  - name: Approvals
+  - name: Balances
+  - name: Settlements
+  - name: Reports
+  - name: Notifications
+paths:
+  /me:
+    get:
+      operationId: getCurrentAccount
+      summary: Get the authenticated account's public profile
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /groups:
+    get:
+      tags: [Groups]
+      operationId: listMyGroups
+      summary: List groups in which the caller has active membership
+      responses:
+        "200":
+          description: Groups visible to the authenticated caller
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Group"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Groups]
+      operationId: createGroup
+      summary: Create a group
+      description: Currency must be selected from the configured supported-currency registry.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupCreate"
+      responses:
+        "201":
+          description: Created group and creator membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /groups/{groupId}/members/{accountId}:
+    delete:
+      tags: [Groups]
+      operationId: removeGroupMember
+      summary: Remove or deactivate a group membership
+      description: Requires group-manager permission; historical expense, approval, and ledger records are retained.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - name: accountId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Membership access revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /groups/{groupId}/approval-policy:
+    get:
+      tags: [Approvals]
+      operationId: getApprovalPolicy
+      summary: Read the active group approval policy
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Active policy and version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalPolicy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [Approvals]
+      operationId: replaceApprovalPolicy
+      summary: Create a new active approval-policy version
+      description: Requires group-manager permission. Approver-selection and quorum rules remain subject to product approval.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalPolicyInput"
+      responses:
+        "200":
+          description: New active policy version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovalPolicy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /groups/{groupId}/invitations:
+    post:
+      tags: [Invitations]
+      operationId: inviteToGroup
+      summary: Invite a person to a group
+      description: Requires current group-manager permission; invitation does not grant access.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitationCreate"
+      responses:
+        "201":
+          description: Pending invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invitation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /invitations/{invitationId}/accept:
+    post:
+      tags: [Invitations]
+      operationId: acceptInvitation
+      summary: Accept an invitation addressed to the authenticated identity
+      description: Only the invited and authenticated account may accept; acceptance creates membership.
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Accepted invitation and active membership
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Membership"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /receipts/{receiptId}:
+    get:
+      tags: [Expenses]
+      operationId: getReceipt
+      summary: Retrieve receipt bytes after current group authorization
+      description: The API does not expose a public permanent object URL.
+      parameters:
+        - name: receiptId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Authorized receipt image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /groups/{groupId}/receipts:
+    post:
+      tags: [Expenses]
+      operationId: uploadReceipt
+      summary: Upload a private receipt image
+      description: Requires active group membership; implementation must enforce size/type limits and private access.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: Private receipt reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Receipt"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /groups/{groupId}/expenses:
+    post:
+      tags: [Expenses]
+      operationId: submitExpense
+      summary: Validate and submit an expense for review
+      description: |
+        Requires active membership. Payer is selected separately from ordered participants
+        and must be a group member. Pending submission has no balance effect. An idempotency
+        key makes retry after an indeterminate timeout safe.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseCreate"
+      responses:
+        "201":
+          description: Pending expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    get:
+      tags: [Expenses]
+      operationId: listExpenses
+      summary: List authorized group expenses
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - name: state
+          in: query
+          schema:
+            $ref: "#/components/schemas/ExpenseState"
+      responses:
+        "200":
+          description: Authorized expense page
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /expenses/{expenseId}:
+    get:
+      tags: [Expenses]
+      operationId: getExpense
+      summary: Read one expense after current group authorization
+      parameters:
+        - name: expenseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Authorized expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /expenses/{expenseId}/approvals:
+    post:
+      tags: [Approvals]
+      operationId: decideExpense
+      summary: Approve or reject an expense at the caller's authorized stage
+      description: |
+        Requires an eligible approver and current expense version. Final approval, ledger postings,
+        balance projection, and outbox intent commit atomically. Pending state is not posted.
+      parameters:
+        - name: expenseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          description: ETag/version previously read for the expense.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalDecision"
+      responses:
+        "200":
+          description: Updated expense state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /groups/{groupId}/balances:
+    get:
+      tags: [Balances]
+      operationId: listBalances
+      summary: Read authorized current pairwise balances
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Pairwise balances in the group's currency
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Balance"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /groups/{groupId}/settlements:
+    post:
+      tags: [Settlements]
+      operationId: recordSettlement
+      summary: Record an asserted payment between group members
+      description: |
+        Authenticated sender must match senderId. The service checks the current directed amount
+        owed and commits the settlement, ledger posting, balance projection, and outbox together.
+        This records a reported payment; it does not transfer funds.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettlementCreate"
+      responses:
+        "201":
+          description: Recorded settlement
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settlement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Stale balance, duplicate conflict, or amount exceeds current debt
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+    get:
+      tags: [Settlements]
+      operationId: listSettlements
+      summary: List authorized settlement history
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Settlements in the inclusive date range
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Settlement"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /groups/{groupId}/reports:
+    get:
+      tags: [Reports]
+      operationId: getReport
+      summary: Get authorized expense, balance, and settlement summaries
+      description: Dates are inclusive; expense and settlement records use their respective business dates.
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: memberId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Summary for matching authorized records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+  /groups/{groupId}/notifications:
+    get:
+      tags: [Notifications]
+      operationId: listNotifications
+      summary: List the authenticated member's group notifications
+      parameters:
+        - $ref: "#/components/parameters/GroupId"
+      responses:
+        "200":
+          description: Notifications for the authenticated recipient
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    parameters:
+      - $ref: "#/components/parameters/GroupId"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token issued by the selected OIDC provider; provider and client-flow configuration remain open.
+  parameters:
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Stable UUID for this logical mutation; reuse unchanged when resolving a timeout.
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid input or unsupported currency precision
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Authenticated caller is not authorized for this resource/action
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found or intentionally not disclosed to caller
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Stale state, invalid transition, or idempotency-key conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Account:
+      type: object
+      required: [accountId, displayName]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    GroupCreate:
+      type: object
+      required: [name, currencyCode]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        currencyCode:
+          type: string
+          description: Must be enabled in the supported-currency registry.
+    Group:
+      type: object
+      required: [groupId, name, currencyCode, currencyScale, membership]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        currencyCode:
+          type: string
+        currencyScale:
+          type: integer
+          minimum: 0
+        membership:
+          $ref: "#/components/schemas/Membership"
+    ApprovalPolicyInput:
+      type: object
+      required: [stages]
+      properties:
+        stages:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [stageNumber, approverIds, requiredApprovals]
+            properties:
+              stageNumber:
+                type: integer
+                minimum: 1
+              approverIds:
+                type: array
+                minItems: 1
+                uniqueItems: true
+                items:
+                  type: string
+                  format: uuid
+              requiredApprovals:
+                type: integer
+                minimum: 1
+    ApprovalPolicy:
+      allOf:
+        - $ref: "#/components/schemas/ApprovalPolicyInput"
+        - type: object
+          required: [policyVersionId, version]
+          properties:
+            policyVersionId:
+              type: string
+              format: uuid
+            version:
+              type: integer
+              minimum: 1
+    InvitationCreate:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    Invitation:
+      type: object
+      required: [invitationId, groupId, state, expiresAt]
+      properties:
+        invitationId:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [PENDING, ACCEPTED, EXPIRED, REVOKED]
+        expiresAt:
+          type: string
+          format: date-time
+    Membership:
+      type: object
+      required: [groupId, accountId, state]
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [ACTIVE, REMOVED]
+    Receipt:
+      type: object
+      required: [receiptId, state]
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [AVAILABLE, SCANNING, REJECTED]
+    ExpenseCreate:
+      type: object
+      required: [amount, expenseDate, description, payerId, participants, split]
+      properties:
+        amount:
+          $ref: "#/components/schemas/DecimalAmount"
+        expenseDate:
+          type: string
+          format: date
+        description:
+          type: string
+          minLength: 1
+        payerId:
+          type: string
+          format: uuid
+        participants:
+          type: array
+          minItems: 1
+          description: Array order is significant and is retained for largest-remainder ties.
+          items:
+            $ref: "#/components/schemas/ParticipantInput"
+        split:
+          oneOf:
+            - $ref: "#/components/schemas/EqualSplit"
+            - $ref: "#/components/schemas/PercentageSplit"
+        receiptId:
+          type: string
+          format: uuid
+    ParticipantInput:
+      type: object
+      required: [accountId]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        percentage:
+          $ref: "#/components/schemas/DecimalAmount"
+    EqualSplit:
+      type: object
+      required: [method]
+      properties:
+        method:
+          const: EQUAL
+    PercentageSplit:
+      type: object
+      required: [method]
+      properties:
+        method:
+          const: PERCENTAGE
+    Expense:
+      type: object
+      required: [expenseId, groupId, amount, currencyCode, currencyScale, payerId, participants, state, version]
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        amount:
+          $ref: "#/components/schemas/DecimalAmount"
+        currencyCode:
+          type: string
+        currencyScale:
+          type: integer
+          minimum: 0
+        payerId:
+          type: string
+          format: uuid
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParticipantShare"
+        state:
+          $ref: "#/components/schemas/ExpenseState"
+        version:
+          type: integer
+          minimum: 1
+    ParticipantShare:
+      type: object
+      required: [accountId, entryOrder, share]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        entryOrder:
+          type: integer
+          minimum: 0
+        share:
+          $ref: "#/components/schemas/DecimalAmount"
+    ExpenseState:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+    ApprovalDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        comment:
+          type: string
+          maxLength: 2000
+    Balance:
+      type: object
+      required: [debtorId, creditorId, amount, currencyCode]
+      properties:
+        debtorId:
+          type: string
+          format: uuid
+        creditorId:
+          type: string
+          format: uuid
+        amount:
+          $ref: "#/components/schemas/DecimalAmount"
+        currencyCode:
+          type: string
+    SettlementCreate:
+      type: object
+      required: [senderId, recipientId, amount, paymentDate]
+      properties:
+        senderId:
+          type: string
+          format: uuid
+        recipientId:
+          type: string
+          format: uuid
+        amount:
+          $ref: "#/components/schemas/DecimalAmount"
+        paymentDate:
+          type: string
+          format: date
+    Settlement:
+      allOf:
+        - $ref: "#/components/schemas/SettlementCreate"
+        - type: object
+          required: [paymentId, groupId, currencyCode, state]
+          properties:
+            paymentId:
+              type: string
+              format: uuid
+            groupId:
+              type: string
+              format: uuid
+            currencyCode:
+              type: string
+            state:
+              type: string
+              const: RECORDED
+    Report:
+      type: object
+      required: [expenseTotal, balances, settlementTotal]
+      properties:
+        expenseTotal:
+          $ref: "#/components/schemas/DecimalAmount"
+        balances:
+          type: array
+          items:
+            $ref: "#/components/schemas/Balance"
+        settlementTotal:
+          $ref: "#/components/schemas/DecimalAmount"
+        expenseCount:
+          type: integer
+          minimum: 0
+        settlementCount:
+          type: integer
+          minimum: 0
+    Notification:
+      type: object
+      required: [notificationId, eventType, createdAt, state]
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          const: EXPENSE_SUBMITTED
+        sourceId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        state:
+          type: string
+          enum: [QUEUED, DELIVERED, RETRYING, FAILED]
+    DecimalAmount:
+      type: string
+      pattern: "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+      description: |
+        Exact base-10 decimal string, never a JSON floating-point number. Input precision must
+        match the group's configured currency scale; amount positivity is operation-specific.
+    Problem:
+      type: object
+      description: RFC 9457 problem details with stable application error code.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        code:
+          type: string
+          description: Stable code such as INVALID_PERCENTAGE, NOT_A_MEMBER, OVERPAYMENT, or STALE_VERSION.

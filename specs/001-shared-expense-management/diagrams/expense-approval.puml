@@ -1,0 +1,45 @@
+@startuml
+title Expense submission through final approval (proposal)
+actor Submitter
+actor Approver
+participant "Swing / Client" as Client
+participant "API + Authorization" as API
+participant "Expense + Split Service" as Expense
+participant "Approval Service" as Approval
+database "PostgreSQL" as DB
+participant "Outbox Worker" as Outbox
+
+Submitter -> Client : enter expense, payer, ordered participants
+Client -> API : POST expense + Idempotency-Key
+API -> API : authenticate; authorize active membership
+alt unauthorized or invalid member/input
+  API --> Client : 401/403 or 400 problem; no expense
+else valid
+  API -> Expense : validate and calculate shares
+  Expense -> Expense : BigDecimal quotas; largest remainder\nentry-order ties; assert exact total
+  Expense -> DB : transaction: pending expense + ordered shares\n+ outbox intent
+  DB --> Expense : committed pending expense
+  Expense --> API : PENDING, version
+  API --> Client : 201 pending
+end
+
+Submitter -> Client : notify group (policy TBD)
+Outbox -> DB : read committed outbox item
+Outbox -> Outbox : dedupe and deliver asynchronously
+
+Approver -> Client : approve or reject
+Client -> API : POST decision + If-Match + Idempotency-Key
+API -> API : authenticate; check current approver eligibility
+API -> Approval : guarded decision(expense, version, actor)
+Approval -> DB : transaction: conditional transition + decision
+alt rejection
+  DB --> Approval : REJECTED; no ledger postings
+else more required stages
+  DB --> Approval : still PENDING; no ledger postings
+else final required approval
+  Approval -> DB : insert unique expense postings\nupdate pairwise projection + outbox
+  DB --> Approval : APPROVED, postings committed once
+end
+Approval --> API : current expense state
+API --> Client : 200 state / 409 stale or duplicate conflict
+@enduml

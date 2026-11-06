@@ -1,0 +1,120 @@
+@startuml
+title SplitSmart domain model (proposal)
+hide methods
+skinparam classAttributeIconSize 0
+
+class Account {
+  +accountId: UUID
+  +identitySubject: String
+  +status: AccountStatus
+}
+class Group {
+  +groupId: UUID
+  +currencyCode: String
+  +currencyScale: int
+  +version: long
+}
+class Membership {
+  +role: GroupRole
+  +state: MembershipState
+  +acceptedAt: Instant
+  +removedAt: Instant?
+}
+class Invitation {
+  +invitationId: UUID
+  +targetEmail: String
+  +state: InvitationState
+  +expiresAt: Instant
+}
+class ApprovalPolicyVersion {
+  +policyVersionId: UUID
+  +version: int
+  +stageCount: int
+}
+class ApprovalStage {
+  +stageNumber: int
+  +quorum: int
+}
+class Expense {
+  +expenseId: UUID
+  +amount: BigDecimal
+  +expenseDate: LocalDate
+  +payerId: UUID
+  +splitMethod: SplitMethod
+  +state: ExpenseState
+  +version: long
+}
+class ExpenseParticipantShare {
+  +entryOrder: int
+  +percentage: BigDecimal?
+  +share: BigDecimal
+}
+class ApprovalDecision {
+  +approvalId: UUID
+  +decision: Decision
+  +createdAt: Instant
+}
+class Receipt {
+  +receiptId: UUID
+  +objectKey: String
+  +mediaType: String
+}
+class LedgerPosting {
+  +postingId: UUID
+  +sourceId: UUID
+  +debtorId: UUID
+  +creditorId: UUID
+  +amount: BigDecimal
+}
+class PairwiseBalance {
+  +debtorId: UUID
+  +creditorId: UUID
+  +amount: BigDecimal
+  +version: long
+}
+class Settlement {
+  +paymentId: UUID
+  +senderId: UUID
+  +recipientId: UUID
+  +amount: BigDecimal
+  +paymentDate: LocalDate
+  +state: SettlementState
+}
+class Notification {
+  +notificationId: UUID
+  +recipientId: UUID
+  +state: DeliveryState
+}
+
+Account "1" -- "0..*" Membership
+Group "1" -- "1..*" Membership
+Group "1" -- "0..*" Invitation
+Account "1" -- "0..*" Invitation : inviter
+Group "1" -- "1..*" ApprovalPolicyVersion
+ApprovalPolicyVersion "1" *-- "1..*" ApprovalStage
+ApprovalStage "1" -- "1..*" Account : eligible approvers
+Group "1" -- "0..*" Expense
+Account "1" -- "0..*" Expense : submitter
+Account "1" -- "0..*" Expense : payer (separate)
+Expense "1" *-- "1..*" ExpenseParticipantShare
+ExpenseParticipantShare "*" --> "1" Account : participant
+Expense "0..1" --> "1" Receipt
+Expense "1" -- "0..*" ApprovalDecision
+ApprovalDecision "*" --> "1" Account : approver
+Expense "1" -- "0..*" LedgerPosting : only after final approval
+Settlement "1" -- "1" LedgerPosting
+Group "1" -- "0..*" Settlement
+Group "1" -- "0..*" PairwiseBalance
+Group "1" -- "0..*" Notification
+Notification "*" --> "1" Account : recipient
+
+note right of Expense
+PENDING/REJECTED: no effective postings
+APPROVED: postings exactly once
+Payer may be outside participant list
+end note
+note bottom of PairwiseBalance
+Projection of immutable ledger postings;
+no self-debt; one currency per group (provisional)
+end note
+@enduml

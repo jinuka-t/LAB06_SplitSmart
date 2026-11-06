@@ -1,0 +1,28 @@
+@startuml
+title Record a reported settlement (proposal)
+actor Sender
+participant "Swing / Client" as Client
+participant "API + Authorization" as API
+participant "Settlement Service" as Settlement
+database "PostgreSQL" as DB
+
+Sender -> Client : enter recipient, amount, date
+Client -> API : POST settlement + Idempotency-Key
+API -> API : authenticate; sender must be caller;\nauthorize group and both members
+alt unauthorized or invalid amount
+  API --> Client : 401/403 or 400 problem; no settlement
+else valid request
+  API -> Settlement : record(sender, recipient, amount, date)
+  Settlement -> DB : begin; lock/check directed balance
+  alt amount exceeds current outstanding
+    DB --> Settlement : no write; rollback
+    Settlement --> API : OVERPAYMENT conflict
+    API --> Client : 409; history and balance unchanged
+  else valid current amount
+    Settlement -> DB : transaction: unique settlement + ledger offset\n+ balance projection + outbox
+    DB --> Settlement : committed once
+    Settlement --> API : RECORDED settlement
+    API --> Client : 201 authoritative result
+  end
+end
+@enduml
