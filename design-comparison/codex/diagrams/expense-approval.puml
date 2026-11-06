@@ -1,0 +1,74 @@
+﻿@startuml
+title Proposed expense submission through final approval
+actor Submitter
+boundary "Swing / future client" as Client
+control "ExpenseService" as Expense
+control "ApprovalService" as Approval
+control "SplitAllocator" as Allocator
+database "SQL (single transaction scopes)" as DB
+control "Outbox Worker" as Worker
+actor Approver
+Submitter -> Client : enter payer, ordered participants, amount, date, receipt?
+Client -> Expense : submit(session, request key, payload)
+Expense -> DB : authenticate; authorize active group membership
+alt unauthorized / inaccessible
+  Expense --> Client : 401 / 404; no writes
+else authorized
+  Expense -> DB : lookup authorized idempotency result
+  alt same key / same payload already committed
+    Expense --> Client : original saved result
+  else new command
+    Expense -> DB : BEGIN; lock group; recheck key replay\nvalidate active payer/participants\npolicy eligible per submitter; staged receipt ready
+    Expense -> Allocator : exact BigDecimal unit allocation in entry order
+    Allocator --> Expense : shares or validation error
+    alt invalid input / no eligible approver / receipt not ready
+      Expense -> DB : ROLLBACK
+      Expense --> Client : 422 field/domain error; no approvable expense
+    else valid
+      Expense -> DB : insert PENDING + shares + frozen policy\nattach receipt + submission outbox\nadvance group read watermark + save result; COMMIT
+      Expense --> Client : 201 PENDING / watermark (no debt)
+      Worker -> DB : poll committed outbox
+      loop captured recipients excluding submitter
+        Worker -> DB : recheck membership; unique inbox delivery\nor retry / audited suppression after removal
+      end
+    end
+  end
+end
+Approver -> Client : review expense / choose APPROVE or REJECT
+Client -> Approval : decide(session, key, expectedVersion, stage, decision)
+Approval -> DB : authenticate + authorize visibility; lookup replay
+alt unauthorized / committed replay / key conflict
+  Approval --> Client : deny / original result / IDEMPOTENCY_CONFLICT
+else new authorized command
+  Approval -> DB : BEGIN; lock group then expense; recheck key replay
+  Approval -> DB : validate version, PENDING, current stage\nactive snapshot eligibility, self-approval rule
+  alt stale / ineligible / terminal / (APPROVE and blocked)
+    Approval -> DB : ROLLBACK
+    Approval --> Client : conflict or authorization/domain error
+  else REJECT
+    Approval -> DB : decision + REJECTED; advance read watermark\nstore result; COMMIT (no postings)
+    Approval --> Client : REJECTED
+  else APPROVE
+    Approval -> DB : insert unique stage/reviewer decision
+    alt not all required stages complete
+      Approval -> DB : advance stage if quorum; keep PENDING\nadvance read watermark; store result; COMMIT
+      Approval --> Client : PENDING / posted=false
+    else final required approval
+      Approval -> DB : unique Finalization; APPROVED\nnonpayer positive-share ledger entries\nupdate pair projection + sequences + read watermark\nstore result (all within transaction)
+      alt failure before commit
+        Approval -> DB : ROLLBACK all decision/status/financial writes
+        Approval --> Client : retryable failure
+      else ready to commit (response may be lost)
+        Approval -> DB : COMMIT atomically
+        Approval --> Client : APPROVED / posted=true / watermark
+        note right of Client
+          Lost response: retry same key.
+          Original result returned; no repost.
+        end note
+      end
+    end
+  end
+end
+@enduml
+
+

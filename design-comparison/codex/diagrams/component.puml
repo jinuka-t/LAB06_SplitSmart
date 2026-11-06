@@ -1,0 +1,54 @@
+﻿@startuml
+skinparam componentStyle rectangle
+title SplitSmart proposed component boundaries
+package "Desktop MVP" {
+  [Swing Views / Presenters] as Swing
+  [HTTP DTO Adapter] as Adapter
+  Swing --> Adapter : background I/O; EDT renders result
+}
+package "Future clients (required product scope)" {
+  [Web] as Web
+  [Android] as Android
+  [iOS] as IOS
+}
+package "Java 21 modular monolith / Maven" {
+  [HTTP + Session Authentication] as HTTP
+  [Application Services\nIdentity / Group / Expense / Approval\nBalance / Settlement / Report / Receipt] as App
+  [Domain Objects\nMoney / SplitAllocator / Policy / PairDebt] as Domain
+  interface "Repository / Transaction / Delivery Ports" as Ports
+  [JDBC + SQL Transactions] as JDBC
+  [Private Receipt Adapter] as Receipt
+  [Outbox Worker / Inbox Delivery] as Worker
+  [Security Email Adapter] as Mail
+  HTTP --> App : trusted principal + request
+  App --> Domain
+  App --> Ports
+  JDBC ..|> Ports
+  Receipt ..|> Ports
+  Mail ..|> Ports
+  Worker --> JDBC : committed outbox / unique inbox
+}
+Adapter --> HTTP : HTTPS /v1
+Web --> HTTP : same proposed contracts
+Android --> HTTP
+IOS --> HTTP
+database "SQL\nLedger + Pair Projection\nPolicies / Shares / Inbox / Outbox" as SQL
+folder "Private Receipt Bytes" as Blobs
+cloud "Email Delivery" as Email
+JDBC --> SQL
+Receipt --> Blobs
+Mail --> Email
+Worker --> Mail : identity verification/recovery
+note bottom of Domain
+No dependency on Swing, HTTP, SQL or floating-point money.
+All financial writes are authoritative service transactions.
+end note
+note right of SQL
+Final approval/payment + ledger + projection
++ idempotency result commit atomically.
+end note
+note bottom of Worker
+Notification retry failure never reverses expense submission.
+In-product submission audience excludes submitter.
+end note
+@enduml

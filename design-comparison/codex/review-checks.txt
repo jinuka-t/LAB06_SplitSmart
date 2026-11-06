@@ -1,0 +1,41 @@
+﻿SplitSmart Codex document-only review checks
+Review date: 2026-11-05 (America/New_York client date)
+No application tests or PlantUML rendering performed.
+Shared snapshot HEAD: e62e6dbe9a1b58b6d5dc7cf327e8d9fcc49e57a4
+PASS source unchanged and equal to HEAD: .specify/memory/constitution.md SHA256=E122727928159542C25621C55172B515A71EC83F1D72CBE5A70B03A211F8E68E
+PASS source unchanged and equal to HEAD: UserRequirement.md SHA256=D36F785F17EDEC1A657DECCC549676EF450A02D35C591D32937AF1075E997B02
+PASS source unchanged and equal to HEAD: specs/001-shared-expense-management/checklists/requirements.md SHA256=59B7BB3347F69CB9212AC97474BB82BD56986227A610F433E8A8FBB41F01BC86
+PASS source unchanged and equal to HEAD: specs/001-shared-expense-management/spec.md SHA256=FC5BABE60D970F5EABA8F192C1F5EFB7002A9FBEC883E0DE6697F3FE2AAD37F1
+PASS source-to-traceability ID inventory: FR=21; all individually tabulated, no extras
+PASS source-to-traceability ID inventory: NFR=5; all individually tabulated, no extras
+PASS source-to-traceability ID inventory: AC=21; all individually tabulated, no extras
+PASS source-to-traceability ID inventory: SC=7; all individually tabulated, no extras
+PASS local Markdown link file targets: 37 checked (fragment semantics not machine-validated)
+PASS required artifact inventory: 13 design artifacts plus this review evidence file
+PASS PlantUML source delimiter/presence check: class.puml; not parsed or rendered
+PASS PlantUML source delimiter/presence check: component.puml; not parsed or rendered
+PASS PlantUML source delimiter/presence check: expense-approval.puml; not parsed or rendered
+PASS PlantUML source delimiter/presence check: settlement.puml; not parsed or rendered
+PASS tracked change-name check: only pre-existing staged proposal paths outside output directory; no content of those files opened
+Git status after generation: pre-existing staged proposal paths and Microsoft/ remain; new Codex output directory untracked. No commit/push/merge.
+Manual semantic review: sources versus design, states/naming, permissions, currency allocation, approval once, settlement history, notification failures, date/report boundaries, diagram/prose/contracts consistency.
+Corrections made during review: NOT_READY initial policy, separate read watermark, under-lock retry-key recheck, explicit approval commit boundary.
+NOT EXECUTED: JUnit 5, Maven build, DB/concurrency/fault tests, rendered UML, keyboard/accessibility, load, usability, external email/notification delivery, web/Android/iOS or cross-client tests.
+Tool availability check: Get-Command java,mvn returned no tools on PATH. No renderer installation attempted.
+Human decisions D01-D10 unresolved; readiness ambiguity/testability remains open; FR-008 vs AC-008 explicitly unresolved.
+Artifacts:
+  design-comparison/codex/architecture.md
+  design-comparison/codex/design.md
+  design-comparison/codex/data-model.md
+  design-comparison/codex/validation.md
+  design-comparison/codex/decisions.md
+  design-comparison/codex/traceability.md
+  design-comparison/codex/contracts/identity-groups.md
+  design-comparison/codex/contracts/expenses.md
+  design-comparison/codex/contracts/finance-reports.md
+  design-comparison/codex/diagrams/component.puml
+  design-comparison/codex/diagrams/class.puml
+  design-comparison/codex/diagrams/expense-approval.puml
+  design-comparison/codex/diagrams/settlement.puml
+  design-comparison/codex/review-checks.txt
+Final semantic correction: POLICY_BLOCKED applies to approval progress; an active eligible current-stage reviewer can still reject. Membership/invitation version fields made explicit. Same files only; no links/requirement inventories added or removed.

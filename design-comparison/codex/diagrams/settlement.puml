@@ -1,0 +1,53 @@
+﻿@startuml
+title Proposed recorded settlement (no bank transfer)
+actor "Payment sender" as Sender
+boundary "Swing / future client" as Client
+control "SettlementService" as Service
+database "SQL" as DB
+Sender -> Client : recipient, amount, paymentDate
+Client -> Service : recordPayment(session, stable key, senderId, recipientId, Money)
+Service -> DB : authenticate; active group membership; sender = principal
+alt unauthorized or inaccessible
+  Service --> Client : 401 / 403 / 404; no writes
+else authorized
+  Service -> DB : lookup own operation key and payload digest
+  alt committed same key and payload
+    DB --> Service : stored payment result
+    Service --> Client : original result; no second payment
+  else reused key with different payload
+    Service --> Client : 409 IDEMPOTENCY_CONFLICT
+  else new command
+    Service -> DB : BEGIN; lock group financial row; recheck key replay
+    Service -> DB : read current canonical pair projection
+    Service -> Service : validate distinct retained members\npositive exact-unit amount, currency, date\nsender is current debtor; amount <= debt
+    alt invalid / wrong direction / overpayment
+      Service -> DB : ROLLBACK; no financial/history writes
+      Service --> Client : 422 domain error with explanation
+    else valid
+      Service -> DB : insert immutable Payment + unique payment posting\nupdate pair balance, financial sequence, read watermark\nstore operation result
+      alt database failure before commit
+        Service -> DB : ROLLBACK all writes
+        Service --> Client : retryable error; same key on retry
+      else commit succeeds
+        Service -> DB : COMMIT
+        Service --> Client : 201 payment/history ID + pairBalanceAfter + watermark
+        note right of Client
+          Timeout after commit: outcome unknown.
+          Retry same key or query own operation.
+          Do not announce offline completion.
+        end note
+      end
+    end
+  end
+end
+Client -> Service : read balances/history with minWatermark
+Service -> DB : authorize; snapshot at or after watermark
+DB --> Service : current pair + retained payment history
+Service --> Client : matching committed views
+note bottom of DB
+Concurrent settlements and approvals take group lock first.
+Second settlement rechecks debt after first commits.
+History retained when balance reaches zero or members leave.
+end note
+@enduml
+

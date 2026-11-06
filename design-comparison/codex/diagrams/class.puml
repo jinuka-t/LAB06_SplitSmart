@@ -1,0 +1,138 @@
+﻿@startuml
+hide methods
+skinparam classAttributeIconSize 0
+title SplitSmart proposed domain class model
+class Account {
+  accountId: UUID
+  email: String
+  state: UNVERIFIED | VERIFIED
+}
+class Group {
+  groupId: UUID
+  currencyCode: String
+  unitScale: int
+  readWatermark: long
+  financialSequence: long
+}
+class Membership {
+  role: MEMBER | MANAGER
+  state: ACTIVE | REMOVED
+}
+class Invitation {
+  state: PENDING | ACCEPTED | DECLINED | REVOKED | EXPIRED
+  targetEmail: String
+}
+class ApprovalPolicy {
+  version: long
+  allowSubmitterApproval: boolean
+}
+class PolicyStage {
+  ordinal: int
+  requiredCount: int
+  eligibleMemberIds: Set
+}
+class Expense {
+  expenseId: UUID
+  expenseDate: LocalDate
+  splitMode: EQUAL | PERCENTAGE
+  state: PENDING | APPROVED | REJECTED | WITHDRAWN
+  version: long
+}
+class Money {
+  currencyCode: String
+  value: BigDecimal
+}
+class Share {
+  entryOrdinal: int
+  percentage: BigDecimal [0..1]
+  amount: BigDecimal
+}
+class ReviewStageSnapshot {
+  ordinal: int
+  requiredCount: int
+  eligibleMemberIds: Set
+}
+class ApprovalDecision {
+  stageOrdinal: int
+  actorId: UUID
+  decision: APPROVE | REJECT
+}
+class Finalization {
+  expenseId: UUID {unique}
+}
+class LedgerEntry {
+  lowId: UUID
+  highId: UUID
+  signedDelta: BigDecimal
+  effectiveDate: LocalDate
+  sequence: long
+}
+class PairBalance {
+  lowId: UUID
+  highId: UUID
+  signedDebt: BigDecimal
+}
+class Payment {
+  paymentId: UUID
+  amount: BigDecimal
+  paymentDate: LocalDate
+  recordedAt: Instant
+}
+class Receipt {
+  state: STAGED | ATTACHED | EXPIRED
+  privateStorageKey: String
+}
+class OutboxEvent {
+  capturedRecipientIds: Set
+  deliveryState: String
+}
+class Notification {
+  recipientId: UUID
+  readAt: Instant [0..1]
+}
+class OperationResult {
+  actor: UUID
+  operation: String
+  key: UUID
+  requestDigest: String
+}
+Account "1" -- "0..*" Membership
+Group "1" *-- "1..*" Membership
+Group "1" -- "0..*" Invitation
+Group "1" *-- "1..*" ApprovalPolicy
+ApprovalPolicy "1" *-- "1..*" PolicyStage
+Group "1" -- "0..*" Expense
+Expense "0..*" --> "1" Membership : independent payer
+Expense "0..*" --> "1" Membership : submitter
+Expense "1" *-- "1" Money
+Expense "1" *-- "1..*" Share
+Share "0..*" --> "1" Membership : participant
+Expense "1" *-- "1..*" ReviewStageSnapshot
+Expense "1" *-- "0..*" ApprovalDecision
+Expense "1" -- "0..1" Finalization
+Finalization "1" -- "0..*" LedgerEntry : nonself positive shares
+Expense "0..1" -- "0..1" Receipt
+Group "1" -- "0..*" Payment
+Payment "0..*" --> "1" Membership : sender
+Payment "0..*" --> "1" Membership : recipient
+Payment "1" -- "1" LedgerEntry
+Group "1" -- "0..*" PairBalance
+PairBalance ..> LedgerEntry : synchronous sum by pair
+Expense "1" -- "1" OutboxEvent : submission
+OutboxEvent "1" -- "0..*" Notification : unique recipient
+OperationResult ..> Expense : committed result/reference
+OperationResult ..> Payment : committed result/reference
+note bottom of Expense
+Payer need not be a participant. Shares preserve entry order.
+BLOCKED is computed review condition, not financial state.
+Pending/rejected/withdrawn have no finalization or ledger entries.
+end note
+note bottom of Membership
+Removal retains historical references.
+All relationship targets must belong to same group.
+end note
+note bottom of Finalization
+Exactly one marker per approved expense,
+even if payer is sole participant (zero debt entries).
+end note
+@enduml
