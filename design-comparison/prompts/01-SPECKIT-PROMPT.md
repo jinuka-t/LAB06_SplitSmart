@@ -1,11 +1,15 @@
 # Prompt 1 — GitHub Spec Kit with Copilot
 
 ```text
-Run this repository's installed speckit-plan skill for SplitSmart shared expense management. Read the Common brief in design-comparison/prompts/README.md, or use the copy provided with this prompt. Treat that brief as the shared acceptance criteria for this planning run.
+Run this repository's installed speckit-plan skill for SplitSmart shared expense management. Read the full Common brief in design-comparison/prompts/README.md and use it as the shared acceptance criteria.
 
-Use the existing feature at specs/001-shared-expense-management. Follow .github/skills/speckit-plan/SKILL.md and the local plan template. Confirm that the plan setup script resolves the existing feature directory before writing design outputs. If PowerShell or feature resolution fails, report the exact blocker and the setup needed to proceed. Do not initialize a new feature or rewrite the specification.
+Read all four source files in the brief and record their actual shared Git commit. Use the existing feature at specs/001-shared-expense-management. Follow .github/skills/speckit-plan/SKILL.md and the local plan template. Confirm the setup script resolves the existing feature directory before writing. If PowerShell or feature resolution fails, report the exact blocker. Do not initialize a new feature or rewrite the specification.
 
-Produce the normal Phase 0 and Phase 1 outputs in the feature directory: plan.md, research.md, data-model.md, contracts/, and quickstart.md. Use plan.md for architecture and constitution gates, research.md for tradeoffs and provisional decisions, data-model.md for the domain and persistence model, contracts/ for interfaces, and quickstart.md for validation scenarios. Add architecture.md or design.md only when useful for detail, diagrams/ for PlantUML, and traceability.md for the coverage matrix. Link these from plan.md. Where the skill calls for research to resolve technical uncertainty, research the options. Keep unresolved product-policy decisions in the open-decision register and explicitly flag any planning gate the available evidence cannot clear. Do not mark the checklist complete.
+Produce the normal Phase 0/1 artifacts in the feature directory: plan.md, research.md, data-model.md, contracts/, and quickstart.md. Use plan.md for architecture and constitution gates; research.md for tradeoffs and provisional decisions; data-model.md for entities and persistence; contracts/ for interfaces; and quickstart.md for validation scenarios. Also produce architecture.md as an explicit readable architecture overview, design.md for detailed interactions, diagrams/ with PlantUML sources, and traceability.md mapping every FR, NFR, AC, and SC. Link them from plan.md.
 
-Generate the proposal independently in this worktree and do not inspect Claude Code's output. Limit changes to architecture and design documentation and its diagrams. Stop after Phase 1. Do not run tasks or implementation, edit any source input, or commit or push. Finish with the source commit, plan path, changed files, gate status, and unresolved decisions.
+Meet every comparable deliverable in the Common brief, including correctness edge cases and planned verification. Clearly identify unresolved product-policy decisions, their impacts, and any gates that cannot yet be cleared. Do not mark the requirements checklist complete without evidence.
+
+Work independently. Do not read or reuse Codex outputs under design-comparison/codex/ or any other generated competing design. Limit changes to the Spec Kit architecture/design documentation and diagrams. Stop after Phase 1. Do not run tasks or implementation, edit source inputs, commit, or push.
+
+Finish with the source commit, plan path, complete changed-file list, actual checks performed, gate status, and unresolved decisions.
 ```
