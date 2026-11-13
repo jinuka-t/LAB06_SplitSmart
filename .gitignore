@@ -60,6 +60,9 @@ Desktop.ini
 !.vscode/settings.json
 .idea/
 
+# PowerShell generated cache
+ModuleAnalysisCache
+
 # Keep Dev Container configuration tracked
 !.devcontainer/
 !.devcontainer/Dockerfile
