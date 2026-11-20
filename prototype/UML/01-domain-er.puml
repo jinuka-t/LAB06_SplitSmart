@@ -1,0 +1,48 @@
+@startuml
+title SplitSmart prototype data model
+entity Person {
+  *id : String <<PK>>
+  name : String
+}
+entity "Group" as DemoGroup {
+  *id : String <<PK>>
+  name : String
+  description : String
+  theme : String
+}
+entity Expense {
+  *id : String <<PK>>
+  groupId : String <<FK>>
+  payerId : String <<FK>>
+  description : String
+  cents : Integer
+  date : String
+  createdAt : DateTime
+  status : String
+  method : String
+}
+entity Share {
+  *expenseId : String <<PK, FK>>
+  *personId : String <<PK, FK>>
+  cents : Integer
+  position : Integer
+  percent : Integer (optional basis points)
+}
+entity Payment {
+  *id : String <<PK>>
+  groupId : String <<FK>>
+  senderId : String <<FK>>
+  recipientId : String <<FK>>
+  cents : Integer
+  date : String
+  createdAt : DateTime
+}
+Person }o--o{ DemoGroup : membership
+DemoGroup ||--o{ Expense
+Person ||--o{ Expense : pays
+Expense ||--o{ Share
+Person ||--o{ Share : participates
+DemoGroup ||--o{ Payment
+Person ||--o{ Payment : sends
+Person ||--o{ Payment : receives
+@enduml

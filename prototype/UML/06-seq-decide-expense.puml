@@ -1,0 +1,21 @@
+@startuml
+title Approve or reject an expense
+actor "Demo reviewer" as User
+participant Workspace as UI
+participant "POST /api/changes" as Route
+participant "Save handler" as Save
+database SQLite as DB
+User -> UI : Approve or reject a pending expense
+UI -> Route : POST expense ID and decision
+Route -> Save : Apply decision
+Save -> DB : Update expense where status is pending
+DB --> Save : Updated row count
+alt One expense updated
+  Save --> Route : Success
+  Route --> UI : JSON success
+  UI -> UI : Refresh queue and recalculate balances
+else No pending expense matched
+  Save --> Route : Already reviewed message
+  Route --> UI : JSON error
+end
+@enduml

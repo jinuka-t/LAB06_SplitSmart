@@ -1,0 +1,11 @@
+@startuml
+title Calculate pairwise balances
+start
+:Read expenses and payment history for the group;
+:Keep approved expenses;
+:For every non-payer share, add a debt from participant to payer;
+:Subtract each recorded payment from the sender's debt to the recipient;
+:Net opposite directions within each pair;
+:Discard zero balances and show the outstanding direction and amount;
+stop
+@enduml

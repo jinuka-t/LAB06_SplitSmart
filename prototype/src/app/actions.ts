@@ -12,6 +12,32 @@ export async function save(data: FormData) {
   try {
     const kind = field("kind");
     const id = field("id");
+    if (kind === "group" || kind === "member") {
+      const name = field("name");
+      if (!/^[0-9a-f-]{36}$/.test(id)) return { error: "Refresh the page and try again." };
+      if (!name || name.length > 80) return { error: "Enter a name of up to 80 characters." };
+      if (kind === "group") {
+        const description = field("description");
+        if (description.length > 180) return { error: "Keep the description to 180 characters." };
+        await db.group.upsert({
+          where: { id }, update: {},
+          create: { id, name, description, theme: "group" },
+        });
+      } else {
+        const groupId = field("groupId");
+        const error = await db.$transaction(async (tx) => {
+          const group = await tx.group.findUnique({ where: { id: groupId }, include: { members: true } });
+          if (!group) return "Choose an existing group.";
+          if (group.members.some(person => person.id === id)) return;
+          if (group.members.some(person => person.name.toLowerCase() === name.toLowerCase())) {
+            return "A member with this name is already in the group.";
+          }
+          await tx.person.create({ data: { id, name, groups: { connect: { id: groupId } } } });
+        });
+        if (error) return { error };
+      }
+      return { error: "" };
+    }
     if (kind === "approved" || kind === "rejected") {
       const result = await db.expense.updateMany({ where: { id, status: "pending" }, data: { status: kind } });
       if (!result.count) return { error: "This expense has already been reviewed. Refresh to see its status." };
