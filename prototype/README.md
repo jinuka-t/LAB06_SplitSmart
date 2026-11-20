@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SplitSmart prototype
 
-## Getting Started
+Run from this directory with Node.js 22.
 
-First, run the development server:
-
-```bash
+```sh
+npm ci
+npx prisma generate
+npm run db:setup
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. Prisma 6 defaults to `prisma/dev.db`. To use an existing SQLite database, set `DATABASE_URL` in `.env` before running migrations, seeding, and starting Next.js. Relative SQLite file URLs resolve from `prisma/`. The migration preserves the original `EnvironmentCheck` table. The seed adds demo records by stable ID and preserves prior decisions and payments when rerun.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Use **Add expense**, then open **Approvals** to inspect its shares and approve or reject it. **Groups** shows member-to-member balances and activity. **Record payment** lets you select an outstanding balance to settle. **Reports** filters approved expenses and payments by inclusive dates and group. The outstanding balance in the report is current.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The workspace uses a fixed Alex Morgan demo identity with single-step review access. The review queue provides in-app demo alerts. Payments log manually reported settlements in USD.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```sh
+npm run lint
+npm run build
+```

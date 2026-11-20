@@ -12,3 +12,67 @@ model EnvironmentCheck {
   message   String
   createdAt DateTime @default(now())
 }
+
+model Person {
+  id       String    @id
+  name     String
+  groups   Group[]
+  expenses Expense[]
+  shares   Share[]
+  sent     Payment[] @relation("Sender")
+  received Payment[] @relation("Recipient")
+}
+
+model Group {
+  id          String    @id
+  name        String
+  description String
+  theme       String
+  members     Person[]
+  expenses    Expense[]
+  payments    Payment[]
+}
+
+model Expense {
+  id          String   @id
+  description String
+  cents       Int
+  date        String
+  createdAt   DateTime @default(now())
+  status      String   @default("pending")
+  method      String
+  groupId     String
+  payerId     String
+  group       Group    @relation(fields: [groupId], references: [id])
+  payer       Person   @relation(fields: [payerId], references: [id])
+  shares      Share[]
+
+  @@index([groupId, status])
+}
+
+model Share {
+  expenseId String
+  personId  String
+  cents     Int
+  position  Int
+  percent   Int?
+  person    Person  @relation(fields: [personId], references: [id])
+  expense   Expense @relation(fields: [expenseId], references: [id])
+
+  @@id([expenseId, personId])
+}
+
+model Payment {
+  id          String   @id
+  cents       Int
+  date        String
+  createdAt   DateTime @default(now())
+  groupId     String
+  senderId    String
+  recipientId String
+  group       Group    @relation(fields: [groupId], references: [id])
+  sender      Person   @relation("Sender", fields: [senderId], references: [id])
+  recipient   Person   @relation("Recipient", fields: [recipientId], references: [id])
+
+  @@index([groupId])
+}
