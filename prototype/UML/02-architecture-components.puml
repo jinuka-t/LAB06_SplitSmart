@@ -1,0 +1,19 @@
+@startuml
+title SplitSmart prototype components
+actor "Demo user" as User
+component "React Workspace" as UI
+node "Next.js server" {
+  component "Dashboard page" as Page
+  component "POST /api/changes" as Route
+  component "Save handler" as Save
+  component "Prisma Client" as Prisma
+}
+database "SQLite" as DB
+User --> UI
+UI --> Page : Load and refresh
+UI --> Route : Submit form
+Route --> Save
+Page --> Prisma : Read groups and activity
+Save --> Prisma : Validate and persist
+Prisma --> DB
+@enduml

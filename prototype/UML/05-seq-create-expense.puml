@@ -1,0 +1,23 @@
+@startuml
+title Submit an expense
+actor "Demo user" as User
+participant Workspace as UI
+participant "POST /api/changes" as Route
+participant "Save handler" as Save
+database SQLite as DB
+User -> UI : Submit expense form
+UI -> Route : POST expense fields and submission ID
+Route -> Save : Parse form and save
+Save -> DB : Read group membership and check submission ID
+alt Valid new submission
+  Save -> Save : Calculate equal or percentage shares in cents
+  Save -> DB : Insert pending expense and shares in one transaction
+  Save --> Route : Success
+else Submission ID already exists
+  Save --> Route : Success
+else Validation fails
+  Save --> Route : Validation message
+end
+Route --> UI : JSON result
+UI -> UI : Refresh on success or display error
+@enduml

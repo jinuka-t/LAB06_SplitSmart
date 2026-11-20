@@ -1,0 +1,13 @@
+@startuml
+title Expense lifecycle
+[*] --> Pending : Submit valid expense
+Pending --> Approved : Approve
+Pending --> Rejected : Reject
+note right of Approved
+  Shares contribute to group balances
+  and approved spending reports.
+end note
+note right of Rejected
+  Retained in group activity.
+end note
+@enduml

@@ -1,0 +1,23 @@
+@startuml
+title Record a payment
+actor "Demo user" as User
+participant Workspace as UI
+participant "POST /api/changes" as Route
+participant "Save handler" as Save
+database SQLite as DB
+User -> UI : Select balance and enter amount and date
+UI -> Route : POST payment details
+Route -> Save : Record payment
+group SQLite transaction
+  Save -> DB : Read membership, approved expenses and payments
+  Save -> Save : Calculate current pairwise debt
+  alt Valid payment within current debt
+    Save -> DB : Save payment record
+  else Invalid or greater than current debt
+    Save -> Save : Return validation message
+  end
+end
+Save --> Route : Result
+Route --> UI : JSON result
+UI -> UI : Refresh on success or display error
+@enduml

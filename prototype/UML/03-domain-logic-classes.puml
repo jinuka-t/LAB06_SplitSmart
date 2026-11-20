@@ -1,0 +1,26 @@
+@startuml
+title SplitSmart prototype modules and data
+class "workspace.tsx" as Workspace <<React component>> {
+  +Workspace(groups)
+}
+class "actions.ts" as Actions <<module>> {
+  +save(data: FormData)
+  -decimal(value: String): Integer
+}
+class "ledger.ts" as Ledger <<module>> {
+  +balances(expenses, payments): PairBalance[]
+}
+class PairBalance <<type>> {
+  from: String
+  to: String
+  cents: Integer
+}
+class "database.ts" as Database <<module>> {
+  +db: PrismaClient
+  +readGroups()
+}
+Workspace ..> Ledger : display balances
+Actions ..> Ledger : check payment amount
+Actions ..> Database : write and query
+Ledger ..> PairBalance : returns
+@enduml

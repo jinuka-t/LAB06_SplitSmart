@@ -1,0 +1,21 @@
+@startuml
+title SplitSmart prototype use cases
+left to right direction
+actor "Demo user" as User
+rectangle SplitSmart {
+  usecase "View dashboard and pending approvals" as Dashboard
+  usecase "Create and browse groups" as Groups
+  usecase "Add members and view net balances" as Members
+  usecase "Submit an equal or percentage expense" as Create
+  usecase "Review, approve or reject an expense" as Review
+  usecase "Record a settlement" as Pay
+  usecase "Filter expense and payment reports" as Reports
+}
+User --> Dashboard
+User --> Groups
+User --> Members
+User --> Create
+User --> Review
+User --> Pay
+User --> Reports
+@enduml

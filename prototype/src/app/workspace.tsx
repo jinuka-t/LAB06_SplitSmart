@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Groups } from "./database";
 import { useRouter } from "next/navigation";
-import { balances } from "./ledger";
+import { balances, memberNetBalances } from "./ledger";
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const money = (cents: number) => currency.format(cents / 100);
@@ -20,6 +20,7 @@ export default function Workspace({ groups }: { groups: Groups }) {
   const [screen, setScreen] = useState<Screen>("Overview");
   const [selected, setSelected] = useState("");
   const [editor, setEditor] = useState<{ kind: "expense" | "payment"; groupId: string; id: string }>();
+  const [management, setManagement] = useState<{ kind: "group" | "member"; id: string }>();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [reportGroup, setReportGroup] = useState("");
@@ -28,6 +29,10 @@ export default function Workspace({ groups }: { groups: Groups }) {
   const [busy, start] = useTransition();
   const group = groups.find(item => item.id === selected);
   const ledgers = groups.map(group => ({ group, pairs: balances(group.expenses, group.payments) }));
+  const groupPairs = ledgers.find(item => item.group.id === group?.id)?.pairs ?? [];
+  const groupNet = memberNetBalances(groupPairs);
+  const expenseGroups = groups.filter(item => item.members.length > 0);
+  const canAddExpense = group ? group.members.length > 0 : expenseGroups.length > 0;
   const allPairs = ledgers.flatMap(item => item.pairs);
   const receivable = total(allPairs.filter(pair => pair.to === "alex"));
   const payable = total(allPairs.filter(pair => pair.from === "alex"));
@@ -46,10 +51,16 @@ export default function Workspace({ groups }: { groups: Groups }) {
   function edit(kind: "expense" | "payment") {
     setIssue("");
     setNotice("");
-    setEditor({ kind, groupId: group?.id ?? groups[0]?.id ?? "", id: crypto.randomUUID() });
+    setEditor({ kind, groupId: group?.id ?? expenseGroups[0]?.id ?? "", id: crypto.randomUUID() });
   }
 
-  function submit(form: FormData, message: string, close = false) {
+  function manage(kind: "group" | "member") {
+    setNotice("");
+    setIssue("");
+    setManagement({ kind, id: crypto.randomUUID() });
+  }
+
+  function submit(form: FormData, message: string, onSuccess?: () => void) {
     setIssue("");
     setNotice("");
     start(async () => {
@@ -65,7 +76,7 @@ export default function Workspace({ groups }: { groups: Groups }) {
         } else {
           if (!response.ok) throw new Error("Unexpected save response");
           router.refresh();
-          if (close) setEditor(undefined);
+          onSuccess?.();
           setNotice(message);
         }
       } catch {
@@ -88,9 +99,9 @@ export default function Workspace({ groups }: { groups: Groups }) {
         <span className={"group-icon " + group.theme} aria-hidden>{themes[group.theme] ?? "◈"}</span>
         <strong>{group.name}</strong><span className="muted">{group.members.length} members</span>
         <span className="group-bottom"><span className="avatars" aria-hidden>{group.members.slice(0, 4).map(person => <span key={person.id}>{person.name[0]}</span>)}</span>
-        <span className={net > 0 ? "green" : net < 0 ? "red" : "muted"}>{net ? money(Math.abs(net)) : "Settled"}{net > 0 ? " owed to you" : net < 0 ? " you owe" : ""}</span></span>
+        <span className={net > 0 ? "green" : net < 0 ? "red" : "muted"}>{net ? money(Math.abs(net)) : group.members.some(person => person.id === "alex") ? "Settled" : "No personal balance"}{net > 0 ? " owed to you" : net < 0 ? " you owe" : ""}</span></span>
       </button>;
-    })}</div> : <Empty>Seed the demo database to browse groups.</Empty>;
+    })}</div> : <Empty>Create a group to start tracking shared expenses.</Empty>;
   }
 
   function expenseRow(expense: Expense & { group: Group }, reviewable = false) {
@@ -128,10 +139,17 @@ export default function Workspace({ groups }: { groups: Groups }) {
       <header className="topbar"><span>Workspace <span className="slash">/</span> <strong>{title}</strong></span><span className="demo" title="Demo identity, in-app alerts, and manually recorded payments">● <span>Demo · Alex Morgan</span></span></header>
       <main className="content">
         {group && <button className="text-button back" onClick={() => navigate("Groups")}>All groups</button>}
-        <div className="page-header"><div><h1>{title}</h1><p>{group?.description ?? subtitles[screen]}</p></div><div className="header-actions"><button className="button" disabled={!groups.length} onClick={() => edit("payment")}>Record payment</button><button className="button primary" disabled={!groups.length} onClick={() => edit("expense")}>＋ Add expense</button></div></div>
+        <div className="page-header">
+          <div><h1>{title}</h1><p>{group?.description || (group ? group.members.length + " members" : subtitles[screen])}</p></div>
+          <div className="header-actions">
+            {screen === "Groups" && !group && <button className="button" onClick={() => manage("group")}>Create group</button>}
+            <button className="button" disabled={!canAddExpense} onClick={() => edit("payment")}>Record payment</button>
+            <button className="button primary" disabled={!canAddExpense} onClick={() => edit("expense")}>＋ Add expense</button>
+          </div>
+        </div>
         {notice && <p role="status" className="notice">{notice}</p>}
-        {issue && !editor && <p role="alert" className="issue">{issue}</p>}
-        {busy && !editor && <p role="status">Saving…</p>}
+        {issue && !editor && !management && <p role="alert" className="issue">{issue}</p>}
+        {busy && !editor && !management && <p role="status">Saving…</p>}
         {screen === "Overview" && <>
           <div className="metrics"><Metric label="Your total balance" value={money(receivable - payable)} icon="◎" highlight note="Across all groups"/><Metric label="You are owed" value={money(receivable)} icon="↙" tone="green" note="From group members"/><Metric label="You owe" value={money(payable)} icon="↗" tone="red" note="To group members"/></div>
           <section className="section"><div className="section-head"><h2>Your groups</h2><button className="text-button" onClick={() => navigate("Groups")}>View all groups</button></div>{groupCards()}</section>
@@ -145,8 +163,20 @@ export default function Workspace({ groups }: { groups: Groups }) {
         {screen === "Groups" && !group && groupCards()}
         {screen === "Groups" && group && <>
           <div className="overview-bottom">
-            <Panel title="Member balances">{ledgers.find(item => item.group.id === group.id)?.pairs.map(pair => <div className="record" key={JSON.stringify([pair.from, pair.to])}><div className="record-main">{name(group, pair.from)} owes <strong>{name(group, pair.to)}</strong></div><strong>{money(pair.cents)}</strong></div>)}{!ledgers.find(item => item.group.id === group.id)?.pairs.length && <Empty>Everyone is settled up.</Empty>}</Panel>
-            <Panel title="Members">{group.members.map(person => <div className="record" key={person.id}><span className="avatar">{person.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</span><strong>{person.name}{person.id === "alex" ? " (you)" : ""}</strong></div>)}</Panel>
+            <Panel title="Pairwise balances">{groupPairs.map(pair => <div className="record" key={JSON.stringify([pair.from, pair.to])}><div className="record-main">{name(group, pair.from)} owes <strong>{name(group, pair.to)}</strong></div><strong>{money(pair.cents)}</strong></div>)}{!groupPairs.length && <Empty>Everyone is settled up.</Empty>}</Panel>
+            <Panel title="Members and net balances" extra={<button className="text-button" onClick={() => manage("member")}>Add member</button>}>
+              {group.members.length ? group.members.map(person => {
+                const net = groupNet.get(person.id) ?? 0;
+                return <div className="record" key={person.id}>
+                  <span className="avatar" aria-hidden>{person.name.split(" ").map(part => part[0]).slice(0, 2).join("")}</span>
+                  <strong className="record-main">{person.name}{person.id === "alex" ? " (you)" : ""}</strong>
+                  <div className="record-amount">
+                    <strong className={net > 0 ? "green" : net < 0 ? "red" : "muted"}>{net > 0 ? "+" : ""}{money(net)}</strong>
+                    <span className="muted">{net > 0 ? "To receive" : net < 0 ? "Owes" : "Settled"}</span>
+                  </div>
+                </div>;
+              }) : <Empty>Add members before recording expenses for this group.</Empty>}
+            </Panel>
           </div>
           <div className="section"><Panel title="Group activity">{activity.some(item => item.groupId === group.id) ? activity.filter(item => item.groupId === group.id).map(item => item.type === "expense" ? expenseRow(item) : paymentRow(item)) : <Empty>No expenses or payments in this group.</Empty>}</Panel></div>
         </>}
@@ -160,7 +190,15 @@ export default function Workspace({ groups }: { groups: Groups }) {
         </>}
       </main>
     </div>
-    {editor && <Editor groups={groups} initial={editor} busy={busy} issue={issue} clearIssue={() => setIssue("")} close={() => { setIssue(""); setEditor(undefined); }} submit={form => submit(form, editor.kind === "expense" ? "Expense submitted for approval." : "Payment recorded. Balances updated.", true)} />}
+    {management && <ManagementEditor
+      kind={management.kind} id={management.id} groupId={group?.id} busy={busy} issue={issue}
+      close={() => { setManagement(undefined); setIssue(""); }}
+      submit={form => submit(form, management.kind === "group" ? "Group created. Add members to get started." : "Member added.", () => {
+        if (management.kind === "group") setSelected(management.id);
+        setManagement(undefined);
+      })}
+    />}
+    {editor && <Editor groups={expenseGroups} initial={editor} busy={busy} issue={issue} clearIssue={() => setIssue("")} close={() => { setIssue(""); setEditor(undefined); }} submit={form => submit(form, editor.kind === "expense" ? "Expense submitted for approval." : "Payment recorded. Balances updated.", () => setEditor(undefined))} />}
   </div>;
 }
 
@@ -172,6 +210,31 @@ function Empty({ children }: { children: ReactNode }) {
 }
 function Metric({ label, value, icon, note, highlight = false, tone = "" }: { label: string; value: string; icon: string; note: string; highlight?: boolean; tone?: string }) {
   return <article className={"metric " + (highlight ? "highlight" : tone)}><div><span>{label}</span><span className="metric-icon" aria-hidden>{icon}</span></div><strong>{value}</strong><p>{note}</p></article>;
+}
+
+function ManagementEditor({ kind, id, groupId, busy, issue, close, submit }: {
+  kind: "group" | "member"; id: string; groupId?: string; busy: boolean;
+  issue: string; close: () => void; submit: (form: FormData) => void;
+}) {
+  const title = kind === "group" ? "Create group" : "Add member";
+  return <dialog ref={node => { if (node && !node.open) node.showModal(); }} className="dialog" aria-labelledby="management-title"
+    onCancel={event => { event.preventDefault(); if (!busy) close(); }}>
+    <div className="dialog-head"><h2 id="management-title">{title}</h2><button type="button" className="button close" aria-label="Close" disabled={busy} onClick={close}>×</button></div>
+    <form onSubmit={event => { event.preventDefault(); submit(new FormData(event.currentTarget)); }}>
+      <input type="hidden" name="kind" value={kind}/>
+      <input type="hidden" name="id" value={id}/>
+      <input type="hidden" name="groupId" value={groupId ?? ""}/>
+      <fieldset className="editor-fields" disabled={busy}>
+        <label>{kind === "group" ? "Group name" : "Member name"}<input name="name" maxLength={80} required/></label>
+        {kind === "group" && <label>Description (optional)<input name="description" maxLength={180}/></label>}
+      </fieldset>
+      {issue && <p role="alert" className="issue">{issue}</p>}
+      <div className="dialog-actions">
+        <button type="button" className="button" disabled={busy} onClick={close}>Cancel</button>
+        <button type="submit" className="button primary" disabled={busy}>{busy ? "Saving…" : title}</button>
+      </div>
+    </form>
+  </dialog>;
 }
 
 function Editor({ groups, initial, issue, busy, close, clearIssue, submit }: {
